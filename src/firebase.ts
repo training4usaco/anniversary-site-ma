@@ -3,15 +3,13 @@ import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-    apiKey: "AIzaSyCmwGw-A4QG2Z4tMPEmdXOizM_wzp1cw-c",
-    authDomain: "anniversary-site-ma.firebaseapp.com",
-    projectId: "anniversary-site-ma",
-    storageBucket: "anniversary-site-ma.firebasestorage.app",
-    messagingSenderId: "1038830184829",
-    appId: "1:1038830184829:web:9be098c5d2f51aa2efc414",
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID,
     measurementId: "G-YWH1HGGYVC"
 };
 
