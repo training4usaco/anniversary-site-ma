@@ -90,7 +90,7 @@ const AnniversaryRecapButton = () => {
     );
 };
 
-export const Welcome = ({ userName }: { userName: string | null }) => {
+export const Welcome = ({  }: { userName: string | null }) => {
     const navigate = useNavigate();
     
     const [showConfetti, setShowConfetti] = useState(false);
