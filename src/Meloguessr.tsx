@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { collection, addDoc } from "firebase/firestore";
 import { db, storage } from "./firebase";
-import EXIF from "exif-js"; // 1. Added import
+import exifr from 'exifr'; 
 
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -20,34 +20,22 @@ let DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-const extractGPS = (file: File): Promise<{lat: number, lng: number} | null> => {
-    return new Promise((resolve) => {
-        EXIF.getData(file as any, function(this: any) {
-            const lat = EXIF.getTag(this, "GPSLatitude");
-            const latRef = EXIF.getTag(this, "GPSLatitudeRef") || "N";
-            const lon = EXIF.getTag(this, "GPSLongitude");
-            const lonRef = EXIF.getTag(this, "GPSLongitudeRef") || "W";
-
-            if (!lat || !lon) {
-                resolve(null);
-                return;
-            }
-
-            const toDecimal = (gps: any, ref: string) => {
-                const d = gps[0].numerator / gps[0].denominator;
-                const m = gps[1].numerator / gps[1].denominator;
-                const s = gps[2].numerator / gps[2].denominator;
-                let decimal = d + (m / 60) + (s / 3600);
-                if (ref === "S" || ref === "W") decimal = decimal * -1;
-                return decimal;
+const extractGPS = async (file: File): Promise<{lat: number, lng: number} | null> => {
+    try {
+        const output = await exifr.gps(file);
+        if (output && output.latitude && output.longitude) {
+            console.log("GPS found:", output);
+            return {
+                lat: output.latitude,
+                lng: output.longitude
             };
-
-            resolve({
-                lat: toDecimal(lat, latRef),
-                lng: toDecimal(lon, lonRef)
-            });
-        });
-    });
+        }
+        console.log("No GPS data in this image.");
+        return null;
+    } catch (error) {
+        console.error("Error reading EXIF:", error);
+        return null;
+    }
 };
 
 const LocationPicker = ({ position, setPosition }: { position: any, setPosition: any }) => {
@@ -82,6 +70,7 @@ export const Meloguessr = () => {
 
     const handleUploadClick = () => fileInputRef.current?.click();
 
+    // --- 3. UPDATED: onFileChange logic ---
     const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -152,6 +141,7 @@ export const Meloguessr = () => {
         return () => { if (previewUrl) URL.revokeObjectURL(previewUrl); };
     }, [previewUrl]);
 
+    // UI CODE REMAINS COMPLETELY UNCHANGED
     return (
         <div style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
