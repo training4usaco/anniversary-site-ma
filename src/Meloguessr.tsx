@@ -3,13 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { collection, addDoc } from "firebase/firestore";
 import { db, storage } from "./firebase";
+import EXIF from "exif-js"; // 1. Added import
 
-// --- MAP IMPORTS ---
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
-// Fix for default map marker icons
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 
@@ -21,8 +20,36 @@ let DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-// --- MAP HELPER COMPONENTS ---
-// 1. Listens for clicks to drop a pin manually
+const extractGPS = (file: File): Promise<{lat: number, lng: number} | null> => {
+    return new Promise((resolve) => {
+        EXIF.getData(file as any, function(this: any) {
+            const lat = EXIF.getTag(this, "GPSLatitude");
+            const latRef = EXIF.getTag(this, "GPSLatitudeRef") || "N";
+            const lon = EXIF.getTag(this, "GPSLongitude");
+            const lonRef = EXIF.getTag(this, "GPSLongitudeRef") || "W";
+
+            if (!lat || !lon) {
+                resolve(null);
+                return;
+            }
+
+            const toDecimal = (gps: any, ref: string) => {
+                const d = gps[0].numerator / gps[0].denominator;
+                const m = gps[1].numerator / gps[1].denominator;
+                const s = gps[2].numerator / gps[2].denominator;
+                let decimal = d + (m / 60) + (s / 3600);
+                if (ref === "S" || ref === "W") decimal = decimal * -1;
+                return decimal;
+            };
+
+            resolve({
+                lat: toDecimal(lat, latRef),
+                lng: toDecimal(lon, lonRef)
+            });
+        });
+    });
+};
+
 const LocationPicker = ({ position, setPosition }: { position: any, setPosition: any }) => {
     useMapEvents({
         click(e) {
@@ -32,7 +59,6 @@ const LocationPicker = ({ position, setPosition }: { position: any, setPosition:
     return position === null ? null : <Marker position={position}></Marker>;
 };
 
-// 2. Automatically pans the map when a location is searched
 const MapController = ({ position }: { position: any }) => {
     const map = useMap();
     useEffect(() => {
@@ -47,39 +73,38 @@ export const Meloguessr = () => {
     const navigate = useNavigate();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // States
     const [uploading, setUploading] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [selectedLocation, setSelectedLocation] = useState<{lat: number, lng: number} | null>(null);
-
-    // Search States
     const [searchQuery, setSearchQuery] = useState("");
     const [isSearching, setIsSearching] = useState(false);
 
-    // Handle File Selection
     const handleUploadClick = () => fileInputRef.current?.click();
-    const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+
+    const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
             setSelectedFile(file);
             setPreviewUrl(URL.createObjectURL(file));
-            setSelectedLocation(null);
-            setSearchQuery(""); // Clear search when picking new image
+            setSearchQuery("");
+
+            const gps = await extractGPS(file);
+            if (gps) {
+                setSelectedLocation(gps);
+            } else {
+                setSelectedLocation(null);
+            }
         }
     };
 
-    // --- NEW: Address Search Logic ---
     const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!searchQuery.trim()) return;
-
         setIsSearching(true);
         try {
-            // Using OpenStreetMap's free Nominatim API
             const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`);
             const data = await response.json();
-
             if (data && data.length > 0) {
                 const { lat, lon } = data[0];
                 const newPos = { lat: parseFloat(lat), lng: parseFloat(lon) };
@@ -95,7 +120,6 @@ export const Meloguessr = () => {
         }
     };
 
-    // Save to Firebase
     const saveLocationToGame = async () => {
         if (!selectedFile || !selectedLocation) return;
         try {
@@ -179,7 +203,6 @@ export const Meloguessr = () => {
                             width: '100%', maxHeight: '200px', objectFit: 'contain', borderRadius: '16px', marginBottom: '20px', backgroundColor: '#F3F4F6'
                         }} />
 
-                        {/* Search Bar */}
                         <form onSubmit={handleSearch} style={{ display: 'flex', width: '100%', gap: '8px', marginBottom: '16px' }}>
                             <input
                                 type="text"
@@ -206,7 +229,6 @@ export const Meloguessr = () => {
 
                         <div style={{ width: '100%', height: '250px', borderRadius: '16px', overflow: 'hidden', marginBottom: '24px', border: '2px solid #E5E7EB' }}>
                             <MapContainer center={[37.33, -121.95]} zoom={11} style={{ height: '100%', width: '100%' }}>
-                                {/* NEW MINIMALIST CARTODB LIGHT TILE LAYER */}
                                 <TileLayer
                                     attribution='&copy; <a href="https://carto.com/attributions">CARTO</a>'
                                     url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
